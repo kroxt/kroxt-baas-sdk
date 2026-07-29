@@ -19,6 +19,9 @@ export class PresenceModule {
    * Subscribes to the presence roster.
    */
   public subscribe(): this {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
     if (this.socket.connected) {
       this.socket.emit("subscribe", "presence");
     } else {
@@ -98,6 +101,9 @@ export class PresenceModule {
    * Emits a typing start indicator to a channel room.
    */
   public startTyping(channel: string): this {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
     this.socket.emit("typing.start", { channel });
     return this;
   }
@@ -106,6 +112,9 @@ export class PresenceModule {
    * Emits a typing stop indicator to a channel room.
    */
   public stopTyping(channel: string): this {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
     this.socket.emit("typing.stop", { channel });
     return this;
   }
@@ -130,6 +139,7 @@ export class RealtimeModule {
   private options: KroxtOptions;
   private storage: StorageAdapter;
   private metadataManager: CollectionMetadataManager;
+  private shouldConnect: boolean = false;
   
   // Roster sub-module
   public presence!: PresenceModule;
@@ -187,9 +197,16 @@ export class RealtimeModule {
 
     this.presence = new PresenceModule(this.socket);
     this.setupEventRouting();
+  }
 
-    // Auto-connect
-    this.socket.connect();
+  /**
+   * Manually establishes the WebSocket connection.
+   */
+  public connect(): void {
+    if (this.socket && !this.socket.connected) {
+      this.shouldConnect = true;
+      this.socket.connect();
+    }
   }
 
   /**
@@ -197,6 +214,7 @@ export class RealtimeModule {
    */
   private setupEventRouting(): void {
     this.socket.on("connect", () => {
+      this.shouldConnect = true;
       if (this.options.debug) {
         console.log(`[Kroxt Realtime] Connection established. Socket ID: ${this.socket.id}`);
       }
@@ -217,8 +235,17 @@ export class RealtimeModule {
       this.collectionChannels.forEach((chan) => {
         const chanColId = chan.getCollectionId();
         if (chanColId && chanColId === eventPayload.collectionId) {
-          // Trigger the simplified event name callback
-          chan.dispatch(operation, eventPayload.data || eventPayload);
+          // Reconstruct the standard Document envelope structure
+          const documentObj = {
+            _id: eventPayload.documentId,
+            projectId: eventPayload.projectId,
+            collectionId: eventPayload.collectionId,
+            ownerId: eventPayload.ownerId,
+            data: eventPayload.data || {},
+            createdAt: eventPayload.createdAt || new Date().toISOString(),
+            updatedAt: eventPayload.updatedAt || new Date().toISOString(),
+          };
+          chan.dispatch(operation, documentObj);
         }
       });
     };
@@ -261,7 +288,7 @@ export class RealtimeModule {
    * Force reconnects the socket client (e.g. after authentication changes query tokens).
    */
   public async reconnect(): Promise<void> {
-    if (this.socket) {
+    if (this.socket && this.shouldConnect) {
       const token = await this.storage.getItem("kroxt_access_token");
       const queryParams: Record<string, string> = {
         projectId: this.options.projectId,
@@ -281,6 +308,7 @@ export class RealtimeModule {
    */
   public disconnect(): void {
     if (this.socket) {
+      this.shouldConnect = false;
       // Disable reconnection before disconnecting so the singleton socket
       // does not automatically re-establish a new connection after logout.
       this.socket.io.opts.reconnection = false;
@@ -293,7 +321,7 @@ export class RealtimeModule {
    * Call this after a new user session is established (e.g. after login).
    */
   public async reconnectWithSession(): Promise<void> {
-    if (this.socket) {
+    if (this.socket && this.shouldConnect) {
       const token = await this.storage.getItem("kroxt_access_token");
       const queryParams: Record<string, string> = {
         projectId: this.options.projectId,

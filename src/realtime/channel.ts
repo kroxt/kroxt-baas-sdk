@@ -16,6 +16,9 @@ export class RealtimeChannel {
    * Subscribes to the websocket channel.
    */
   public subscribe(): this {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
     if (this.socket.connected) {
       this.socket.emit("subscribe", this.channelName);
     } else {
@@ -52,6 +55,9 @@ export class RealtimeChannel {
    * Emits a message to the custom channel.
    */
   public emit(event: string, payload: any): this {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
     this.socket.emit("publish", {
       channel: this.channelName,
       event,
@@ -98,6 +104,9 @@ export class CollectionChannel extends RealtimeChannel {
         this.resolvedCollectionId = id;
         this.channelName = `collection:${id}`;
         
+        if (!this.socket.connected) {
+          this.socket.connect();
+        }
         if (this.socket.connected) {
           this.socket.emit("subscribe", this.channelName);
         } else {

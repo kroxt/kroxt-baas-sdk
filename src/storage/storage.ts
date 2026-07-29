@@ -3,6 +3,66 @@ import { KroxtOptions } from "../types";
 
 export interface UploadOptions {
   onProgress?: (progressEvent: { loaded: number; total?: number; percentage: number }) => void;
+  folder?: string;
+  visibility?: "public" | "private";
+  tags?: string[];
+}
+
+export interface StorageFile {
+  _id: string;
+  projectId: string;
+  originalName: string;
+  fileName: string;
+  url: string;
+  mimeType: string;
+  extension: string;
+  size: number;
+  folder: string;
+  bucket: string;
+  visibility: "public" | "private";
+  type: "image" | "video" | "audio" | "document" | "archive" | "other";
+  uploadedBy: string | null;
+  uploadedByType: "developer" | "projectUser";
+  tags: string[];
+  metadata: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StorageFolder {
+  _id: string;
+  projectId: string;
+  name: string;
+  path: string;
+  description?: string;
+  createdBy: string | null;
+  createdByType: "developer" | "projectUser";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListFilesOptions {
+  folder?: string;
+  type?: StorageFile["type"];
+  uploadedBy?: string;
+  visibility?: StorageFile["visibility"];
+  search?: string;
+  limit?: number;
+  skip?: number;
+}
+
+export interface CreateFolderOptions {
+  name: string;
+  path?: string;
+  description?: string;
+}
+
+export interface UpdateFileOptions {
+  originalName?: string;
+  folder?: string;
+  visibility?: StorageFile["visibility"];
+  tags?: string[];
+  metadata?: Record<string, any>;
 }
 
 export class StorageModule {
@@ -15,13 +75,32 @@ export class StorageModule {
   }
 
   /**
+   * Creates a project storage folder that uploads can target.
+   */
+  public async createFolder(options: CreateFolderOptions): Promise<StorageFolder> {
+    const response = await this.http.post<any>(
+      `/projects/${this.options.projectId}/storage/folders`,
+      options
+    );
+    return response.data || response;
+  }
+
+  /**
+   * Lists project storage folders.
+   */
+  public async listFolders(): Promise<StorageFolder[]> {
+    const response = await this.http.get<any>(`/projects/${this.options.projectId}/storage/folders`);
+    return response.data || response;
+  }
+
+  /**
    * Uploads a file to the Kroxt BaaS storage server.
    * Supports standard File, Blob, Buffer, or ReadStreams.
    */
   public async upload(
     file: any,
     uploadOptions?: UploadOptions
-  ): Promise<{ url: string; key: string; size: number; mimeType: string }> {
+  ): Promise<StorageFile> {
     const uploadUrl = `/projects/${this.options.projectId}/storage/upload`;
     
     // Dynamically require FormData to support Node and Browser environments
@@ -38,6 +117,9 @@ export class StorageModule {
 
     const form = new FormDataConstructor();
     form.append("file", file);
+    if (uploadOptions?.folder) form.append("folder", uploadOptions.folder);
+    if (uploadOptions?.visibility) form.append("visibility", uploadOptions.visibility);
+    if (uploadOptions?.tags?.length) form.append("tags", uploadOptions.tags.join(","));
 
     const headers: Record<string, string> = {};
     if (typeof form.getHeaders === "function") {
@@ -60,14 +142,49 @@ export class StorageModule {
   }
 
   /**
-   * Deletes a file from the storage system by its absolute URL or unique file key.
+   * Lists uploaded files for the current project.
    */
-  public async delete(fileUrlOrKey: string): Promise<boolean> {
-    const deleteUrl = `/projects/${this.options.projectId}/storage/files`;
-    
-    const response = await this.http.delete<any>(deleteUrl, {
-      data: { fileUrl: fileUrlOrKey },
+  public async list(options: ListFilesOptions = {}): Promise<{
+    files: StorageFile[];
+    total: number;
+    limit: number;
+    skip: number;
+  }> {
+    const query = new URLSearchParams();
+    Object.entries(options).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) query.set(key, String(value));
     });
+
+    const queryString = query.toString();
+    const url = `/projects/${this.options.projectId}/storage${queryString ? `?${queryString}` : ""}`;
+    const response = await this.http.get<any>(url);
+    return response.data || response;
+  }
+
+  /**
+   * Gets metadata for a single uploaded file.
+   */
+  public async get(fileId: string): Promise<StorageFile> {
+    const response = await this.http.get<any>(`/projects/${this.options.projectId}/storage/${fileId}`);
+    return response.data || response;
+  }
+
+  /**
+   * Updates editable metadata for a stored file.
+   */
+  public async update(fileId: string, options: UpdateFileOptions): Promise<StorageFile> {
+    const response = await this.http.patch<any>(
+      `/projects/${this.options.projectId}/storage/${fileId}`,
+      options
+    );
+    return response.data || response;
+  }
+
+  /**
+   * Deletes a file from the storage system by metadata file ID.
+   */
+  public async delete(fileId: string): Promise<boolean> {
+    const response = await this.http.delete<any>(`/projects/${this.options.projectId}/storage/${fileId}`);
 
     const success = response.success !== undefined ? response.success : true;
     return success;
