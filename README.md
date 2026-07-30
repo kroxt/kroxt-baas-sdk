@@ -16,7 +16,6 @@ Create a client with your project ID and API key:
 import Kroxt from "@kroxt/baas-sdk";
 
 const kroxt = new Kroxt({
-  baseUrl: "https://api.example.com",
   projectId: "PROJECT_ID",
   apiKey: "PROJECT_API_KEY",
 });
@@ -155,7 +154,6 @@ const result = await kroxt.functions.invoke("send-welcome-email", {
 const kroxt = new Kroxt({
   projectId: "PROJECT_ID",
   apiKey: "PROJECT_API_KEY",
-  baseUrl: "https://api.example.com",
   timeout: 30000,
   retries: 3,
   autoRefresh: true,

@@ -23,9 +23,7 @@ export class HttpClient {
     this.options = options;
     this.storage = getStorageAdapter(options.storage);
 
-    const defaultBaseUrl = typeof window !== "undefined"
-      ? (window.location.origin || "http://localhost:3000")
-      : "http://localhost:3000";
+    const defaultBaseUrl = "https://kroxt-baas.onrender.com";
 
     this.instance = axios.create({
       baseURL: options.baseUrl || defaultBaseUrl,
@@ -116,7 +114,7 @@ export class HttpClient {
                 // Call refresh endpoint on a fresh request to avoid circular interception
                 const refreshUrl = `/projects/${this.options.projectId}/auth/refresh`;
                 const res = await axios.post(
-                  (this.options.baseUrl || "http://localhost:3000") + refreshUrl,
+                  (this.options.baseUrl || "https://kroxt-baas.onrender.com") + refreshUrl,
                   { refreshToken },
                   { headers: { "x-api-key": this.options.apiKey } }
                 );
