@@ -160,9 +160,7 @@ export class RealtimeModule {
    * Establishes the WebSocket Socket.IO connection
    */
   private initSocket(): void {
-    const defaultHost = typeof window !== "undefined"
-      ? (window.location.origin || "http://localhost:3000")
-      : "http://localhost:3000";
+    const defaultHost = "https://kroxt-baas.onrender.com";
 
     const connectionUrl = this.options.baseUrl || defaultHost;
 
