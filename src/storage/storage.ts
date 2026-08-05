@@ -6,6 +6,8 @@ export interface UploadOptions {
   folder?: string;
   visibility?: "public" | "private";
   tags?: string[];
+  filename?: string;
+  contentType?: string;
 }
 
 export interface StorageFile {
@@ -94,6 +96,31 @@ export class StorageModule {
   }
 
   /**
+   * Deletes a project storage folder if it has no files in it.
+   */
+  public async deleteFolder(folderId: string): Promise<boolean> {
+    const response = await this.http.delete<any>(
+      `/projects/${this.options.projectId}/storage/folders/${folderId}`
+    );
+    const success = response.success !== undefined ? response.success : true;
+    return success;
+  }
+
+  /**
+   * Updates a project storage folder metadata (renaming or changing file size limit).
+   */
+  public async updateFolder(
+    folderId: string,
+    options: Partial<CreateFolderOptions & { maxFileSize?: number | null }>
+  ): Promise<StorageFolder> {
+    const response = await this.http.patch<any>(
+      `/projects/${this.options.projectId}/storage/folders/${folderId}`,
+      options
+    );
+    return response.data || response;
+  }
+
+  /**
    * Uploads a file to the Kroxt BaaS storage server.
    * Supports standard File, Blob, Buffer, or ReadStreams.
    */
@@ -116,7 +143,38 @@ export class StorageModule {
     }
 
     const form = new FormDataConstructor();
-    form.append("file", file);
+    
+    // Determine append options (filename, contentType, etc.)
+    const appendOptions: Record<string, any> = {};
+    if (uploadOptions?.filename) {
+      appendOptions.filename = uploadOptions.filename;
+    } else if (typeof file === "object" && file !== null) {
+      if (file.name) {
+        appendOptions.filename = file.name;
+      } else if (file.path && typeof file.path === "string") {
+        appendOptions.filename = require("path").basename(file.path);
+      }
+    }
+    
+    if (uploadOptions?.contentType) {
+      appendOptions.contentType = uploadOptions.contentType;
+    } else if (typeof file === "object" && file !== null && file.type) {
+      appendOptions.contentType = file.type;
+    }
+
+    // In Node.js environment, if it is a Buffer, we MUST provide a filename option to form-data, otherwise it won't be sent as a file field.
+    const isNode = typeof window === "undefined";
+    const isBuffer = typeof Buffer !== "undefined" && Buffer.isBuffer(file);
+    if (isNode && isBuffer && !appendOptions.filename) {
+      appendOptions.filename = "file.bin";
+    }
+
+    if (Object.keys(appendOptions).length > 0) {
+      form.append("file", file, appendOptions);
+    } else {
+      form.append("file", file);
+    }
+
     if (uploadOptions?.folder) form.append("folder", uploadOptions.folder);
     if (uploadOptions?.visibility) form.append("visibility", uploadOptions.visibility);
     if (uploadOptions?.tags?.length) form.append("tags", uploadOptions.tags.join(","));
