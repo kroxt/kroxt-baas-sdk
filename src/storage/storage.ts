@@ -169,19 +169,31 @@ export class StorageModule {
       appendOptions.filename = "file.bin";
     }
 
-    if (Object.keys(appendOptions).length > 0) {
-      form.append("file", file, appendOptions);
+    if (typeof form.getHeaders === "function") {
+      // In Node.js environment, form-data accepts the options object as the third argument
+      if (Object.keys(appendOptions).length > 0) {
+        form.append("file", file, appendOptions);
+      } else {
+        form.append("file", file);
+      }
     } else {
-      form.append("file", file);
+      // In the browser environment, FormData.append only accepts a string filename as the third argument
+      if (appendOptions.filename) {
+        form.append("file", file, appendOptions.filename);
+      } else {
+        form.append("file", file);
+      }
     }
 
     if (uploadOptions?.folder) form.append("folder", uploadOptions.folder);
     if (uploadOptions?.visibility) form.append("visibility", uploadOptions.visibility);
     if (uploadOptions?.tags?.length) form.append("tags", uploadOptions.tags.join(","));
 
-    const headers: Record<string, string> = {};
+    const headers: Record<string, any> = {};
     if (typeof form.getHeaders === "function") {
       Object.assign(headers, form.getHeaders());
+    } else {
+      headers["Content-Type"] = undefined;
     }
 
     const response = await this.http.post<any>(uploadUrl, form, {

@@ -149,4 +149,36 @@ export class AuthModule {
     
     return newAccessToken;
   }
+
+  /**
+   * Updates the logged-in project user's profile details (displayName, avatar, metadata) on the server.
+   */
+  public async update(payload: {
+    displayName?: string;
+    avatar?: string;
+    metadata?: Record<string, any>;
+  }): Promise<KroxtUser> {
+    const updatePath = `/projects/${this.options.projectId}/users/me`;
+    const response = await this.http.patch<any>(updatePath, payload);
+    const user: KroxtUser = response.data || response;
+
+    await this.storage.setItem("kroxt_user_profile", JSON.stringify(user));
+    return user;
+  }
+
+  /**
+   * Updates the logged-in project user's password.
+   * This invalidates the active session and clears all local tokens.
+   */
+  public async updatePassword(newPassword: string): Promise<void> {
+    const changePasswordPath = `/projects/${this.options.projectId}/auth/change-password`;
+    
+    try {
+      await this.http.post(changePasswordPath, { newPassword });
+    } finally {
+      await this.storage.removeItem("kroxt_access_token");
+      await this.storage.removeItem("kroxt_refresh_token");
+      await this.storage.removeItem("kroxt_user_profile");
+    }
+  }
 }
