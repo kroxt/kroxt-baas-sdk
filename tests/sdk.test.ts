@@ -196,4 +196,112 @@ describe("Kroxt SDK Core & HTTP Client", () => {
       expect(store.getItem("test_key")).toBeNull();
     });
   });
+
+  describe("AuthModule updates", () => {
+    it("should update project user profile details and save to storage", async () => {
+      const mockUser = {
+        id: "usr_123",
+        email: "test@example.com",
+        displayName: "Updated User",
+        avatar: "avatar.png",
+        metadata: { age: 30 },
+      };
+
+      // Mock request on mockAxiosInstance
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        data: mockUser,
+      });
+
+      const updated = await baas.auth.update({
+        displayName: "Updated User",
+        avatar: "avatar.png",
+        metadata: { age: 30 },
+      });
+
+      expect(updated.displayName).toBe("Updated User");
+      expect(updated.avatar).toBe("avatar.png");
+      expect(updated.metadata?.age).toBe(30);
+
+      // Verify the storage has been updated
+      const cached = await baas.auth.getCachedUser();
+      expect(cached).toEqual(mockUser);
+    });
+
+    it("should update user password and clear local session tokens from storage", async () => {
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        success: true,
+      });
+
+      const memoryStorage = baas.auth["storage"];
+      await memoryStorage.setItem("kroxt_access_token", "mock_access");
+      await memoryStorage.setItem("kroxt_refresh_token", "mock_refresh");
+      await memoryStorage.setItem("kroxt_user_profile", JSON.stringify({ id: "usr_123" }));
+
+      await baas.auth.updatePassword("NewSecurePassword123!");
+
+      expect(mockAxiosInstance.request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "POST",
+          url: expect.stringContaining("/auth/change-password"),
+          data: { newPassword: "NewSecurePassword123!" },
+        })
+      );
+
+      expect(await memoryStorage.getItem("kroxt_access_token")).toBeNull();
+      expect(await memoryStorage.getItem("kroxt_refresh_token")).toBeNull();
+      expect(await memoryStorage.getItem("kroxt_user_profile")).toBeNull();
+    });
+  });
+
+  describe("StorageModule upload", () => {
+    it("should include form-data headers in Node.js environment", async () => {
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        data: { url: "https://kroxt.com/file.png" },
+      });
+
+      const result = await baas.storage.upload(Buffer.from("test"), {
+        filename: "test.txt",
+      });
+
+      expect(result.url).toBe("https://kroxt.com/file.png");
+      expect(mockAxiosInstance.request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "POST",
+          url: expect.stringContaining("/storage/upload"),
+          headers: expect.objectContaining({
+            "content-type": expect.stringContaining("multipart/form-data; boundary="),
+          }),
+        })
+      );
+    });
+
+    it("should set Content-Type to undefined in browser environment", async () => {
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        data: { url: "https://kroxt.com/file.png" },
+      });
+
+      const originalWindow = (global as any).window;
+      (global as any).window = {
+        FormData: class MockFormData {
+          append() {}
+        },
+      };
+
+      try {
+        const result = await baas.storage.upload({ name: "test.txt", type: "text/plain" });
+
+        expect(result.url).toBe("https://kroxt.com/file.png");
+        expect(mockAxiosInstance.request).toHaveBeenCalledWith(
+          expect.objectContaining({
+            method: "POST",
+            headers: expect.objectContaining({
+              "Content-Type": undefined,
+            }),
+          })
+        );
+      } finally {
+        (global as any).window = originalWindow;
+      }
+    });
+  });
 });
