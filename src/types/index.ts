@@ -182,3 +182,6 @@ export type RealtimeCallback<T = any> = (data: T) => void;
 export interface KroxtPlugin {
   install(client: any): void;
 }
+
+export * from "./payment";
+
