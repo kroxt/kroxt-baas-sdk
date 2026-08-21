@@ -7,8 +7,10 @@ import { CommunicationModule } from "./communication/communication";
 import { FunctionsModule } from "./functions/functions";
 import { RealtimeModule } from "./realtime/realtime";
 import { StorageModule } from "./storage/storage";
+import { PaymentModule } from "./payment/payment";
 import { PluginManager } from "./core/plugin";
 import { OfflineQueue } from "./core/offline";
+
 
 // Export sub-modules and core types so they can be consumed by developers
 export * from "./types";
@@ -33,6 +35,8 @@ export class Kroxt {
   public readonly realtime: RealtimeModule;
   /** File storage and upload module */
   public readonly storage: StorageModule;
+  /** Payment & Subscriptions processing module */
+  public readonly payment: PaymentModule;
   /** Offline operations storage and background synchronizer */
   public readonly offlineQueue: OfflineQueue;
 
@@ -58,6 +62,7 @@ export class Kroxt {
     this.functions = new FunctionsModule(this.http, options);
     this.realtime = new RealtimeModule(options, this.metadataManager);
     this.storage = new StorageModule(this.http, options);
+    this.payment = new PaymentModule(this.http, options);
 
     // Initialize offline sync architecture
     this.offlineQueue = new OfflineQueue(async (op) => {
